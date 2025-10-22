@@ -51,7 +51,7 @@ Here’s a sneak peek of Whisp in action: (...work in progress...)
 
 ### 3 Cozy Animations / Theme
 
-![Theme Demo](https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif)
+![Theme Demo](https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExMG1sMHYxMWYwdmhtY3Mwb203NWE3ank4eDdpNnhvZWtwbHhndGRybCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Z5HVfEvnxr67u/giphy.gif)
 
 ## Contributing
 
