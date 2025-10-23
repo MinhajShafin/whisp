@@ -7,7 +7,7 @@ const messageSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
-  content: { type: String, required: true },
+  content: { type: String, required: true, maxLength: 1000 },
   createdAt: { type: Date, default: Date.now },
 });
 
