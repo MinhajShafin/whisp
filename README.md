@@ -30,12 +30,37 @@ A cozy little microblogging platform where your thoughts, memes, and hot takes f
 
 ## Quick Start
 
+### Backend Setup
+
+1. **Clone the repository:**
+
 ```bash
 git clone https://github.com/MinhajShafin/whisp.git
-cd whisp
-npm install
-npm run dev
+cd whisp/backend
 ```
+
+2. **Install dependencies:**
+
+```bash
+npm install
+```
+
+3. **Configure environment variables:**
+
+```bash
+cp .env.example .env
+# Edit .env with your MongoDB URI and JWT secret
+```
+
+4. **Start the server:**
+
+```bash
+npm start
+```
+
+The backend server will run on **http://localhost:5000** (or the PORT specified in your `.env` file).
+
+⚠️ **Important:** When testing with Postman or connecting your frontend, make sure to use the correct port (default: 5000, not 3000).
 
 ## Demo
 
@@ -51,7 +76,7 @@ Here’s a sneak peek of Whisp in action: (...work in progress...)
 
 ### 3 Cozy Animations / Theme
 
-![Theme Demo](https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExMG1sMHYxMWYwdmhtY3Mwb203NWE3ank4eDdpNnhvZWtwbHhndGRybCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Z5HVfEvnxr67u/giphy.gif)
+![Theme Demo](https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTB2eXlvOWJrYWF1c21lejlvMzFnczl5djQ5aGFiN3dkd29heDU3NyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/26ufdipQqU2lhNA4g/giphy.gif)
 
 ## Contributing
 

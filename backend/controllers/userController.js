@@ -1,5 +1,6 @@
 import User from "../models/userModel.js";
 import jwt from "jsonwebtoken";
+import Whisper from "../models/whisperModel.js";
 
 // helper function to create token
 const generateToken = (id) => {
@@ -11,12 +12,48 @@ export const registerUser = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
+    // Simple validation
+    if (
+      !username ||
+      typeof username !== "string" ||
+      username.trim().length < 3 ||
+      username.trim().length > 32
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Username must be 3-32 characters." });
+    }
+    if (
+      !email ||
+      typeof email !== "string" ||
+      !email.includes("@") ||
+      email.length > 64
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Valid email required (max 64 chars)." });
+    }
+    if (
+      !password ||
+      typeof password !== "string" ||
+      password.length < 6 ||
+      password.length > 64
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Password must be 6-64 characters." });
+    }
+
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    const user = await User.create({ username, email, password });
+    const user = await User.create({
+      username: username.trim(),
+      email: email.trim(),
+      password,
+    });
     const token = generateToken(user._id);
 
     res.status(201).json({
@@ -37,6 +74,29 @@ export const registerUser = async (req, res) => {
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    // Simple validation
+    if (
+      !email ||
+      typeof email !== "string" ||
+      !email.includes("@") ||
+      email.length > 64
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Valid email required (max 64 chars)." });
+    }
+    if (
+      !password ||
+      typeof password !== "string" ||
+      password.length < 6 ||
+      password.length > 64
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Password must be 6-64 characters." });
+    }
+
     const user = await User.findOne({ email });
 
     if (user && (await user.matchPassword(password))) {
@@ -52,5 +112,156 @@ export const loginUser = async (req, res) => {
     }
   } catch (error) {
     res.status(500).json({ message: "Login failed" });
+  }
+};
+
+// Block a user
+export const blockUser = async (req, res) => {
+  const blockerId = req.user._id;
+  const { userId } = req.params; // user to block
+
+  try {
+    if (blockerId.toString() === userId) {
+      return res.status(400).json({ message: "You cannot block yourself" });
+    }
+
+    const blocker = await User.findById(blockerId);
+    const targetUser = await User.findById(userId);
+
+    if (!targetUser) return res.status(404).json({ message: "User not found" });
+
+    if (blocker.blocked.some((id) => id.toString() === userId)) {
+      return res.status(400).json({ message: "User already blocked" });
+    }
+
+    // Remove each other from friends list
+    blocker.friends = blocker.friends.filter((id) => id.toString() !== userId);
+    targetUser.friends = targetUser.friends.filter(
+      (id) => id.toString() !== blockerId.toString()
+    );
+
+    // Remove pending friend requests between the pair
+    blocker.friendRequests = blocker.friendRequests.filter(
+      (id) => id.toString() !== userId
+    );
+    targetUser.friendRequests = targetUser.friendRequests.filter(
+      (id) => id.toString() !== blockerId.toString()
+    );
+
+    // Add to blocked list
+    blocker.blocked.push(userId);
+
+    await blocker.save();
+    await targetUser.save();
+
+    res
+      .status(200)
+      .json({ message: `User ${targetUser.username} blocked successfully` });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to block user" });
+  }
+};
+
+// Unblock a user
+export const unblockUser = async (req, res) => {
+  const blockerId = req.user._id;
+  const { userId } = req.params; // user to unblock
+
+  try {
+    const blocker = await User.findById(blockerId);
+
+    if (!blocker.blocked.some((id) => id.toString() === userId)) {
+      return res.status(400).json({ message: "User is not blocked" });
+    }
+
+    // Remove the user from blocked array
+    blocker.blocked = blocker.blocked.filter((id) => id.toString() !== userId);
+    await blocker.save();
+
+    res.status(200).json({ message: "User unblocked successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to unblock user" });
+  }
+};
+
+// Get all blocked users for logged-in user
+export const getBlockedUsers = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).populate(
+      "blocked",
+      "username email"
+    );
+
+    res.status(200).json(user.blocked); // array of blocked user objects
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to get blocked users" });
+  }
+};
+
+// Get user profile by ID
+export const getUserProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select("-password")
+      .populate("friends", "username email");
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Count whispers by this user
+    const whisperCount = await Whisper.countDocuments({ user: user._id });
+
+    // Compute mutual friends if requester is not the same user
+    let mutualCount = 0;
+    if (req.user._id.toString() !== user._id.toString()) {
+      const requester = await User.findById(req.user._id);
+      const requesterFriendIds = requester.friends.map((f) => f.toString());
+      const userFriendIds = user.friends.map((f) => f._id.toString());
+      mutualCount = userFriendIds.filter((id) =>
+        requesterFriendIds.includes(id)
+      ).length;
+    }
+
+    res.status(200).json({
+      _id: user._id,
+      username: user.username,
+      bio: user.bio,
+      avatar: user.avatar,
+      friendCount: user.friends.length,
+      whisperCount,
+      mutualFriendsWithRequester: mutualCount,
+      createdAt: user.createdAt,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to fetch profile" });
+  }
+};
+
+// Update user profile
+export const updateUserProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    user.username = req.body.username || user.username;
+    user.bio = req.body.bio || user.bio;
+    user.avatar = req.body.avatar || user.avatar;
+
+    await user.save();
+
+    res.status(200).json({
+      _id: user._id,
+      username: user.username,
+      bio: user.bio,
+      avatar: user.avatar,
+      friendCount: user.friends.length,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to update profile" });
   }
 };
