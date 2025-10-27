@@ -14,7 +14,7 @@ A cozy little microblogging platform where your thoughts, memes, and hot takes f
 
 - Frontend: React.js / Next.js
 - Backend: Node.js / Express
-- Database: MongoDB / PostgreSQL
+- Database: MongoDB
 - Authentication: JWT / OAuth
 
 <p align="center">

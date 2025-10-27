@@ -1,6 +1,14 @@
 import Whisper from "../models/whisperModel.js";
 import User from "../models/userModel.js";
 
+// Simple pagination helper
+const getPagination = (req) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+  const skip = (page - 1) * limit;
+  return { page, limit, skip };
+};
+
 // Create a new whisper (protected route)
 export const createWhisper = async (req, res) => {
   try {
@@ -25,11 +33,37 @@ export const createWhisper = async (req, res) => {
 // Get all whispers (public route)
 export const getWhispers = async (req, res) => {
   try {
-    const whispers = await Whisper.find()
-      .sort({ createdAt: -1 })
-      .populate("user", "username"); // populate username
+    const wantsPagination = Boolean(req.query.page || req.query.limit);
 
-    res.status(200).json(whispers);
+    if (!wantsPagination) {
+      const whispers = await Whisper.find()
+        .sort({ createdAt: -1 })
+        .populate("user", "username");
+      return res.status(200).json(whispers);
+    }
+
+    const { page, limit, skip } = getPagination(req);
+    const [totalDocs, whispers] = await Promise.all([
+      Whisper.countDocuments({}),
+      Whisper.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("user", "username"),
+    ]);
+
+    const totalPages = Math.ceil(totalDocs / limit) || 1;
+    return res.status(200).json({
+      data: whispers,
+      pagination: {
+        page,
+        limit,
+        totalDocs,
+        totalPages,
+        hasPrev: page > 1,
+        hasNext: page < totalPages,
+      },
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to fetch whispers" });
@@ -48,35 +82,90 @@ export const getTimeline = async (req, res) => {
     );
     allowedUsers.push(user._id); // include self
 
-    const feed = await Whisper.find({ user: { $in: allowedUsers } })
-      .sort({ createdAt: -1 })
-      .populate("user", "username avatar") // whisper author
-      .populate("comments.user", "username avatar") // comment authors
-      .populate("comments.replies.user", "username avatar"); // reply authors
+    const wantsPagination = Boolean(req.query.page || req.query.limit);
+    const { page, limit, skip } = getPagination(req);
 
-    // Add points dynamically
+    const [totalDocs, feed] = await Promise.all([
+      wantsPagination
+        ? Whisper.countDocuments({ user: { $in: allowedUsers } })
+        : Promise.resolve(null),
+      Whisper.find({ user: { $in: allowedUsers } })
+        .sort({ createdAt: -1 })
+        .skip(wantsPagination ? skip : 0)
+        .limit(wantsPagination ? limit : 0)
+        .populate("user", "username avatar") // whisper author
+        .populate("comments.user", "username avatar") // comment authors
+        .populate("comments.replies.user", "username avatar"), // reply authors
+    ]);
+
+    // Build enriched feed
     const enrichedFeed = feed.map((whisper) => {
-      const points =
-        (whisper.likes?.length || 0) - (whisper.dislikes?.length || 0);
+      const likeCount = whisper.likes?.length || 0;
+      const dislikeCount = whisper.dislikes?.length || 0;
+      const points = likeCount - dislikeCount;
 
-      // Sort comments by date (newest first)
-      const sortedComments = whisper.comments
-        ?.map((comment) => ({
-          ...comment.toObject(),
-          replies: comment.replies
-            ?.map((reply) => reply.toObject())
-            .sort((a, b) => b.createdAt - a.createdAt),
-        }))
+      const comments = whisper.comments
+        ?.map((comment) => {
+          const commentLikeCount = comment.likes?.length || 0;
+          const commentDislikeCount = comment.dislikes?.length || 0;
+          const commentPoints = commentLikeCount - commentDislikeCount;
+
+          const replies = comment.replies
+            ?.map((reply) => ({
+              _id: reply._id,
+              text: reply.text,
+              user: reply.user,
+              createdAt: reply.createdAt,
+              likeCount: reply.likes?.length || 0,
+              dislikeCount: reply.dislikes?.length || 0,
+              points:
+                (reply.likes?.length || 0) - (reply.dislikes?.length || 0),
+            }))
+            .sort((a, b) => b.createdAt - a.createdAt);
+
+          return {
+            _id: comment._id,
+            text: comment.text,
+            user: comment.user,
+            createdAt: comment.createdAt,
+            likeCount: commentLikeCount,
+            dislikeCount: commentDislikeCount,
+            points: commentPoints,
+            replies,
+          };
+        })
         .sort((a, b) => b.createdAt - a.createdAt);
 
       return {
-        ...whisper.toObject(),
+        _id: whisper._id,
+        content: whisper.content,
+        user: whisper.user,
+        likes: whisper.likes,
+        dislikes: whisper.dislikes,
+        likeCount,
+        dislikeCount,
         points,
-        comments: sortedComments,
+        createdAt: whisper.createdAt,
+        comments,
       };
     });
 
-    res.status(200).json(enrichedFeed);
+    if (!wantsPagination) {
+      return res.status(200).json(enrichedFeed);
+    }
+
+    const totalPages = Math.ceil((totalDocs || 0) / limit) || 1;
+    return res.status(200).json({
+      data: enrichedFeed,
+      pagination: {
+        page,
+        limit,
+        totalDocs,
+        totalPages,
+        hasPrev: page > 1,
+        hasNext: page < totalPages,
+      },
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to fetch timeline" });
@@ -97,14 +186,24 @@ export const likeWhisper = async (req, res) => {
     );
 
     // Toggle like
-    if (whisper.likes.includes(userId)) {
+    if (whisper.likes.some((id) => id.toString() === userId)) {
       whisper.likes = whisper.likes.filter((id) => id.toString() !== userId);
       await whisper.save();
-      return res.status(200).json({ message: "Like removed" });
+      const likeCount = whisper.likes.length;
+      const dislikeCount = whisper.dislikes.length;
+      const points = likeCount - dislikeCount;
+      return res
+        .status(200)
+        .json({ message: "Like removed", likeCount, dislikeCount, points });
     } else {
       whisper.likes.push(userId);
       await whisper.save();
-      return res.status(200).json({ message: "Liked" });
+      const likeCount = whisper.likes.length;
+      const dislikeCount = whisper.dislikes.length;
+      const points = likeCount - dislikeCount;
+      return res
+        .status(200)
+        .json({ message: "Liked", likeCount, dislikeCount, points });
     }
   } catch (error) {
     console.error(error);
@@ -124,16 +223,26 @@ export const dislikeWhisper = async (req, res) => {
     whisper.likes = whisper.likes.filter((id) => id.toString() !== userId);
 
     // Toggle dislike
-    if (whisper.dislikes.includes(userId)) {
+    if (whisper.dislikes.some((id) => id.toString() === userId)) {
       whisper.dislikes = whisper.dislikes.filter(
         (id) => id.toString() !== userId
       );
       await whisper.save();
-      return res.status(200).json({ message: "Dislike removed" });
+      const likeCount = whisper.likes.length;
+      const dislikeCount = whisper.dislikes.length;
+      const points = likeCount - dislikeCount;
+      return res
+        .status(200)
+        .json({ message: "Dislike removed", likeCount, dislikeCount, points });
     } else {
       whisper.dislikes.push(userId);
       await whisper.save();
-      return res.status(200).json({ message: "Disliked" });
+      const likeCount = whisper.likes.length;
+      const dislikeCount = whisper.dislikes.length;
+      const points = likeCount - dislikeCount;
+      return res
+        .status(200)
+        .json({ message: "Disliked", likeCount, dislikeCount, points });
     }
   } catch (error) {
     console.error(error);
@@ -180,7 +289,14 @@ export const addComment = async (req, res) => {
     whisper.comments.push(newComment);
     await whisper.save();
 
-    res.status(201).json({ message: "Comment added" });
+    // Get the newly added comment and populate user info
+    const addedComment = whisper.comments[whisper.comments.length - 1];
+    await addedComment.populate("user", "username avatar");
+
+    res.status(201).json({
+      message: "Comment added",
+      comment: addedComment,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to add comment" });
@@ -228,7 +344,14 @@ export const replyToComment = async (req, res) => {
     comment.replies.push(reply);
     await whisper.save();
 
-    res.status(201).json({ message: "Reply added" });
+    // Get the newly added reply and populate user info
+    const addedReply = comment.replies[comment.replies.length - 1];
+    await addedReply.populate("user", "username avatar");
+
+    res.status(201).json({
+      message: "Reply added",
+      reply: addedReply,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to add reply" });
@@ -346,5 +469,205 @@ export const deleteReply = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to delete reply" });
+  }
+};
+
+// Like a comment
+export const likeComment = async (req, res) => {
+  const { id: whisperId, commentId } = req.params;
+  const userId = req.user._id.toString();
+
+  try {
+    const whisper = await Whisper.findById(whisperId);
+    if (!whisper) return res.status(404).json({ message: "Whisper not found" });
+
+    const comment = whisper.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+    // Remove from dislikes if present
+    comment.dislikes = comment.dislikes.filter(
+      (id) => id.toString() !== userId
+    );
+
+    if (comment.likes.some((id) => id.toString() === userId)) {
+      comment.likes = comment.likes.filter((id) => id.toString() !== userId);
+      await whisper.save();
+      const likeCount = comment.likes.length;
+      const dislikeCount = comment.dislikes.length;
+      const points = likeCount - dislikeCount;
+      return res.status(200).json({
+        message: "Like removed",
+        comment,
+        likeCount,
+        dislikeCount,
+        points,
+      });
+    }
+
+    comment.likes.push(userId);
+    await whisper.save();
+    {
+      const likeCount = comment.likes.length;
+      const dislikeCount = comment.dislikes.length;
+      const points = likeCount - dislikeCount;
+      res
+        .status(200)
+        .json({ message: "Liked", comment, likeCount, dislikeCount, points });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to like comment" });
+  }
+};
+
+// Dislike a comment
+export const dislikeComment = async (req, res) => {
+  const { id: whisperId, commentId } = req.params;
+  const userId = req.user._id.toString();
+
+  try {
+    const whisper = await Whisper.findById(whisperId);
+    if (!whisper) return res.status(404).json({ message: "Whisper not found" });
+
+    const comment = whisper.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+    // Remove from likes if present
+    comment.likes = comment.likes.filter((id) => id.toString() !== userId);
+
+    if (comment.dislikes.some((id) => id.toString() === userId)) {
+      comment.dislikes = comment.dislikes.filter(
+        (id) => id.toString() !== userId
+      );
+      await whisper.save();
+      const likeCount = comment.likes.length;
+      const dislikeCount = comment.dislikes.length;
+      const points = likeCount - dislikeCount;
+      return res.status(200).json({
+        message: "Dislike removed",
+        comment,
+        likeCount,
+        dislikeCount,
+        points,
+      });
+    }
+
+    comment.dislikes.push(userId);
+    await whisper.save();
+    {
+      const likeCount = comment.likes.length;
+      const dislikeCount = comment.dislikes.length;
+      const points = likeCount - dislikeCount;
+      res.status(200).json({
+        message: "Disliked",
+        comment,
+        likeCount,
+        dislikeCount,
+        points,
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to dislike comment" });
+  }
+};
+
+// Like a reply
+export const likeReply = async (req, res) => {
+  const { id: whisperId, commentId, replyId } = req.params;
+  const userId = req.user._id.toString();
+
+  try {
+    const whisper = await Whisper.findById(whisperId);
+    if (!whisper) return res.status(404).json({ message: "Whisper not found" });
+
+    const comment = whisper.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+    const reply = comment.replies.id(replyId);
+    if (!reply) return res.status(404).json({ message: "Reply not found" });
+
+    // Remove from dislikes if present
+    reply.dislikes = reply.dislikes.filter((id) => id.toString() !== userId);
+
+    // Toggle like
+    if (reply.likes.some((id) => id.toString() === userId)) {
+      reply.likes = reply.likes.filter((id) => id.toString() !== userId);
+      await whisper.save();
+      const likeCount = reply.likes.length;
+      const dislikeCount = reply.dislikes.length;
+      const points = likeCount - dislikeCount;
+      return res.status(200).json({
+        message: "Like removed",
+        reply,
+        likeCount,
+        dislikeCount,
+        points,
+      });
+    }
+
+    reply.likes.push(userId);
+    await whisper.save();
+    {
+      const likeCount = reply.likes.length;
+      const dislikeCount = reply.dislikes.length;
+      const points = likeCount - dislikeCount;
+      res
+        .status(200)
+        .json({ message: "Liked", reply, likeCount, dislikeCount, points });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to like reply" });
+  }
+};
+
+// Dislike a reply
+export const dislikeReply = async (req, res) => {
+  const { id: whisperId, commentId, replyId } = req.params;
+  const userId = req.user._id.toString();
+
+  try {
+    const whisper = await Whisper.findById(whisperId);
+    if (!whisper) return res.status(404).json({ message: "Whisper not found" });
+
+    const comment = whisper.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+    const reply = comment.replies.id(replyId);
+    if (!reply) return res.status(404).json({ message: "Reply not found" });
+
+    // Remove from likes if present
+    reply.likes = reply.likes.filter((id) => id.toString() !== userId);
+
+    // Toggle dislike
+    if (reply.dislikes.some((id) => id.toString() === userId)) {
+      reply.dislikes = reply.dislikes.filter((id) => id.toString() !== userId);
+      await whisper.save();
+      const likeCount = reply.likes.length;
+      const dislikeCount = reply.dislikes.length;
+      const points = likeCount - dislikeCount;
+      return res.status(200).json({
+        message: "Dislike removed",
+        reply,
+        likeCount,
+        dislikeCount,
+        points,
+      });
+    }
+
+    reply.dislikes.push(userId);
+    await whisper.save();
+    {
+      const likeCount = reply.likes.length;
+      const dislikeCount = reply.dislikes.length;
+      const points = likeCount - dislikeCount;
+      res
+        .status(200)
+        .json({ message: "Disliked", reply, likeCount, dislikeCount, points });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to dislike reply" });
   }
 };
