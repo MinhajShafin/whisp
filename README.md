@@ -12,7 +12,7 @@ A cozy little microblogging platform where your thoughts, memes, and hot takes f
 
 ## Tech Stack
 
-- Frontend: React.js / Next.js
+- Frontend: React.js / Vite
 - Backend: Node.js / Express
 - Database: MongoDB
 - Authentication: JWT / OAuth
