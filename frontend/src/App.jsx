@@ -1,12 +1,7 @@
-import './global.css'
+import AppRouter from "@/router.jsx";
 
 function App() {
-
-  return (
-    <div className="h-screen flex items-center justify-center bg-gray-900 text-white">
-      <h1 className="text-4xl font-bold">Whisp 🕊️</h1>
-    </div>
-  )
+  return <AppRouter />;
 }
 
-export default App
+export default App;
