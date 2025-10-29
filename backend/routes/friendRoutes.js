@@ -6,6 +6,7 @@ import {
   cancelFriendRequest,
   getFriends,
   getFriendRequests,
+  getOutgoingRequests,
   removeFriend,
   getMutualFriends,
 } from "../controllers/friendController.js";
@@ -21,6 +22,7 @@ router.post("/reject", rejectFriendRequest);
 router.post("/cancel", cancelFriendRequest);
 router.get("/friends", getFriends);
 router.get("/requests", getFriendRequests);
+router.get("/outgoing", getOutgoingRequests);
 router.get("/mutual/:friendId", getMutualFriends);
 router.delete("/:friendId", removeFriend);
 

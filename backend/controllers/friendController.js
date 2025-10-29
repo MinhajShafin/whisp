@@ -182,6 +182,23 @@ export const getFriendRequests = async (req, res) => {
   }
 };
 
+// Get outgoing friend requests (requests sent by current user)
+export const getOutgoingRequests = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Find all users who have the current user in their friendRequests
+    const usersWithRequest = await User.find({
+      friendRequests: userId,
+    }).select("_id username email");
+
+    res.status(200).json(usersWithRequest);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to get outgoing requests" });
+  }
+};
+
 // Remove a friend
 export const removeFriend = async (req, res) => {
   const userId = req.user._id;
