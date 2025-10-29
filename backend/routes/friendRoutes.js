@@ -3,6 +3,7 @@ import {
   sendFriendRequest,
   acceptFriendRequest,
   rejectFriendRequest,
+  cancelFriendRequest,
   getFriends,
   getFriendRequests,
   removeFriend,
@@ -17,6 +18,7 @@ router.use(protect); // all routes are protected
 router.post("/request", sendFriendRequest);
 router.post("/accept", acceptFriendRequest);
 router.post("/reject", rejectFriendRequest);
+router.post("/cancel", cancelFriendRequest);
 router.get("/friends", getFriends);
 router.get("/requests", getFriendRequests);
 router.get("/mutual/:friendId", getMutualFriends);

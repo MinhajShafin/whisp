@@ -206,21 +206,48 @@ export const getUserProfile = async (req, res) => {
   try {
     const user = await User.findById(req.params.id)
       .select("-password")
-      .populate("friends", "username email");
+      .populate("friends", "username email")
+      .populate("friendRequests", "_id");
 
     if (!user) return res.status(404).json({ message: "User not found" });
 
     // Count whispers by this user
     const whisperCount = await Whisper.countDocuments({ user: user._id });
 
-    // Compute mutual friends if requester is not the same user
+    // Compute relationship flags relative to requester
+    const requesterId = req.user._id.toString();
+    const targetId = user._id.toString();
+    const isSelf = requesterId === targetId;
+
+    const requester = await User.findById(req.user._id).select(
+      "friends blocked friendRequests"
+    );
+
+    const requesterFriendIds = new Set(
+      requester.friends.map((f) => f.toString())
+    );
+    const userFriendIds = new Set(user.friends.map((f) => f._id.toString()));
+
+    const isFriend = requesterFriendIds.has(targetId);
+    // Incoming for requester if requester has a request from target
+    const hasIncomingRequest = (requester.friendRequests || [])
+      .map((f) => f.toString())
+      .includes(targetId);
+
+    // Outgoing from requester == target has request from requester
+    const hasSentRequest = user.friendRequests
+      .map((f) => f._id.toString())
+      .includes(requesterId);
+
+    const isBlocked = requester.blocked
+      .map((b) => b.toString())
+      .includes(targetId);
+
+    // mutual friends count (if not self)
     let mutualCount = 0;
-    if (req.user._id.toString() !== user._id.toString()) {
-      const requester = await User.findById(req.user._id);
-      const requesterFriendIds = requester.friends.map((f) => f.toString());
-      const userFriendIds = user.friends.map((f) => f._id.toString());
-      mutualCount = userFriendIds.filter((id) =>
-        requesterFriendIds.includes(id)
+    if (!isSelf) {
+      mutualCount = Array.from(userFriendIds).filter((id) =>
+        requesterFriendIds.has(id)
       ).length;
     }
 
@@ -233,6 +260,13 @@ export const getUserProfile = async (req, res) => {
       whisperCount,
       mutualFriendsWithRequester: mutualCount,
       createdAt: user.createdAt,
+      relationship: {
+        isSelf,
+        isFriend,
+        hasSentRequest,
+        hasIncomingRequest,
+        isBlocked,
+      },
     });
   } catch (error) {
     console.error(error);
@@ -263,5 +297,33 @@ export const updateUserProfile = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to update profile" });
+  }
+};
+
+// Search user by username
+export const searchUserByUsername = async (req, res) => {
+  try {
+    const { username } = req.params;
+
+    if (!username || username.trim().length === 0) {
+      return res.status(400).json({ message: "Username is required" });
+    }
+
+    // Case-insensitive search
+    const user = await User.findOne({
+      username: { $regex: new RegExp(`^${username.trim()}$`, "i") },
+    }).select("_id username");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      _id: user._id,
+      username: user.username,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to search user" });
   }
 };

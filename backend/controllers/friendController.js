@@ -46,6 +46,36 @@ export const sendFriendRequest = async (req, res) => {
   }
 };
 
+// Cancel a sent friend request (by sender)
+export const cancelFriendRequest = async (req, res) => {
+  const { receiverId } = req.body; // the user who received the request
+  const senderId = req.user._id;
+
+  if (!receiverId || typeof receiverId !== "string") {
+    return res.status(400).json({ message: "Receiver ID is required" });
+  }
+
+  try {
+    const receiver = await User.findById(receiverId);
+    if (!receiver) return res.status(404).json({ message: "User not found" });
+
+    const before = receiver.friendRequests.length;
+    receiver.friendRequests = receiver.friendRequests.filter(
+      (id) => id.toString() !== senderId.toString()
+    );
+
+    if (receiver.friendRequests.length === before) {
+      return res.status(400).json({ message: "No pending request to cancel" });
+    }
+
+    await receiver.save();
+    res.status(200).json({ message: "Friend request cancelled" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to cancel friend request" });
+  }
+};
+
 // Accept a friend request
 export const acceptFriendRequest = async (req, res) => {
   const { senderId } = req.body;

@@ -7,6 +7,7 @@ import {
   getBlockedUsers,
   getUserProfile,
   updateUserProfile,
+  searchUserByUsername,
 } from "../controllers/userController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -18,6 +19,7 @@ router.post("/login", loginUser);
 // All routes below require authentication
 router.use(protect);
 
+router.get("/search/:username", searchUserByUsername);
 router.post("/block/:userId", blockUser);
 router.post("/unblock/:userId", unblockUser);
 router.get("/blocked", getBlockedUsers);

@@ -55,6 +55,39 @@ export default function Profile() {
     }
   }, [id]);
 
+  // Friend actions
+  const refreshProfile = async () => {
+    try {
+      const res = await axiosInstance.get(`/users/${id}`);
+      setProfile(res.data);
+    } catch {}
+  };
+
+  const handleSendRequest = async () => {
+    await axiosInstance.post("/friends/request", { receiverId: id });
+    await refreshProfile();
+  };
+
+  const handleCancelRequest = async () => {
+    await axiosInstance.post("/friends/cancel", { receiverId: id });
+    await refreshProfile();
+  };
+
+  const handleAcceptRequest = async () => {
+    await axiosInstance.post("/friends/accept", { senderId: id });
+    await refreshProfile();
+  };
+
+  const handleRejectRequest = async () => {
+    await axiosInstance.post("/friends/reject", { senderId: id });
+    await refreshProfile();
+  };
+
+  const handleUnfriend = async () => {
+    await axiosInstance.delete(`/friends/${id}`);
+    await refreshProfile();
+  };
+
   const handleLike = async (whisperId) => {
     try {
       const res = await axiosInstance.post(`/whispers/${whisperId}/like`);
@@ -164,6 +197,36 @@ export default function Profile() {
         isOwnProfile={isOwnProfile}
         onEditProfile={handleEditProfile}
       />
+
+      {!isOwnProfile && profile.relationship && (
+        <div className="mb-6">
+          {profile.relationship.isFriend ? (
+            <Button variant="outline" onClick={handleUnfriend}>
+              Unfriend
+            </Button>
+          ) : profile.relationship.hasIncomingRequest ? (
+            <div className="flex gap-2">
+              <Button onClick={handleAcceptRequest}>
+                Accept Friend Request
+              </Button>
+              <Button variant="outline" onClick={handleRejectRequest}>
+                Reject
+              </Button>
+            </div>
+          ) : profile.relationship.hasSentRequest ? (
+            <Button variant="outline" onClick={handleCancelRequest}>
+              Cancel Request
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSendRequest}
+              disabled={profile.relationship.isBlocked}
+            >
+              Add Friend
+            </Button>
+          )}
+        </div>
+      )}
 
       <EditProfileModal
         isOpen={isEditModalOpen}
