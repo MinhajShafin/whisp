@@ -2,6 +2,7 @@ import User from "../models/userModel.js";
 import jwt from "jsonwebtoken";
 import Whisper from "../models/whisperModel.js";
 import Message from "../models/messageModel.js";
+import TokenBlacklist from "../models/tokenBlacklistModel.js";
 
 // helper function to create token
 const generateToken = (id) => {
@@ -45,6 +46,13 @@ export const registerUser = async (req, res) => {
         .json({ message: "Password must be 6-64 characters." });
     }
 
+    // Prevent duplicate username
+    const usernameExists = await User.findOne({ username: username.trim() });
+    if (usernameExists) {
+      return res.status(400).json({ message: "Username already taken" });
+    }
+
+    // Prevent duplicate email
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ message: "User already exists" });
@@ -64,7 +72,15 @@ export const registerUser = async (req, res) => {
       token,
     });
   } catch (error) {
-    console.error("Registration Error:", error.message);
+    console.error("Registration Error:", error);
+    // Handle duplicate key errors from unique indexes gracefully
+    if (error && error.code === 11000) {
+      const fields = Object.keys(error.keyPattern || {});
+      let message = "Duplicate field value";
+      if (fields.includes("username")) message = "Username already taken";
+      else if (fields.includes("email")) message = "Email already registered";
+      return res.status(400).json({ message });
+    }
     res
       .status(500)
       .json({ message: "Registration failed", error: error.message });
@@ -370,10 +386,32 @@ export const changePassword = async (req, res) => {
         .json({ message: "New password must be different from current" });
     }
 
-    user.password = newPassword; // will be hashed by pre-save hook
+    user.password = newPassword; // will be hashed by pre-save hook and will set passwordChangedAt
     await user.save();
 
-    return res.status(200).json({ message: "Password changed successfully" });
+    // Blacklist current token to immediately invalidate this session
+    try {
+      const authHeader = req.headers.authorization || "";
+      const token = authHeader.startsWith("Bearer ")
+        ? authHeader.split(" ")[1]
+        : null;
+      if (token) {
+        const decoded = jwt.decode(token); // read exp without verifying again
+        const expiresAt = decoded?.exp
+          ? new Date(decoded.exp * 1000)
+          : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // fallback 7d
+        await TokenBlacklist.create({ token, expiresAt });
+      }
+    } catch (blErr) {
+      // Ignore duplicate blacklist errors or minor issues
+      if (blErr?.code !== 11000) {
+        console.warn("Token blacklist note:", blErr?.message || blErr);
+      }
+    }
+
+    return res
+      .status(200)
+      .json({ message: "Password changed successfully", requireReauth: true });
   } catch (error) {
     console.error("Change password error:", error);
     return res.status(500).json({ message: "Failed to change password" });

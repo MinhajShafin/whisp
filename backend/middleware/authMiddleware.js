@@ -29,6 +29,18 @@ export const protect = async (req, res, next) => {
           .status(401)
           .json({ message: "Not authorized, user not found" });
       }
+      // Invalidate tokens issued before password change
+      if (user.passwordChangedAt) {
+        const changedTimestamp = Math.floor(
+          new Date(user.passwordChangedAt).getTime() / 1000
+        );
+        if (decoded.iat && decoded.iat < changedTimestamp) {
+          return res
+            .status(401)
+            .json({ message: "Not authorized, please log in again" });
+        }
+      }
+
       req.user = user;
 
       return next(); // continue to the next middleware or route

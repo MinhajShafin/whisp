@@ -15,6 +15,8 @@ const userSchema = mongoose.Schema(
     isEmailVerified: { type: Boolean, default: false },
     emailVerificationToken: { type: String },
     emailVerificationExpires: { type: Date },
+    // Security: invalidate old tokens issued before this timestamp
+    passwordChangedAt: { type: Date },
   },
   { timestamps: true }
 );
@@ -22,6 +24,8 @@ const userSchema = mongoose.Schema(
 // Hash password before saving
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
+  // Set passwordChangedAt slightly in the past to account for token issuance timing
+  this.passwordChangedAt = new Date(Date.now() - 1000);
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });

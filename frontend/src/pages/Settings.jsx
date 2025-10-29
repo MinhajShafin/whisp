@@ -105,8 +105,9 @@ export default function Settings() {
         currentPassword: passwords.current,
         newPassword: passwords.new,
       });
-      setPwMsg("Password changed successfully");
+      setPwMsg("Password changed. Please log in again.");
       setPasswords({ current: "", new: "", confirm: "" });
+      if (typeof logout === "function") logout();
     } catch (err) {
       setPwErr(err.response?.data?.message || "Failed to change password");
     } finally {
