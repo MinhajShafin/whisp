@@ -4,6 +4,7 @@ import { AuthContext } from "@/context/AuthContext";
 import axiosInstance from "@/api/axiosInstance";
 import ProfileHeader from "@/components/ProfileHeader";
 import WhisperCard from "@/components/WhisperCard";
+import EditProfileModal from "@/components/EditProfileModal";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
@@ -16,6 +17,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [whispersLoading, setWhispersLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const isOwnProfile = currentUser?._id === id;
 
@@ -104,8 +106,27 @@ export default function Profile() {
   };
 
   const handleEditProfile = () => {
-    // TODO: Open edit profile modal/page
-    alert("Edit profile coming soon!");
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveProfile = async (updatedData) => {
+    const res = await axiosInstance.put("/users/me", updatedData);
+    // Update profile state with new data
+    setProfile((prev) => ({
+      ...prev,
+      username: res.data.username,
+      bio: res.data.bio,
+    }));
+    // Also update whispers to reflect new username
+    setWhispers((prev) =>
+      prev.map((w) => ({
+        ...w,
+        user: {
+          ...w.user,
+          username: res.data.username,
+        },
+      }))
+    );
   };
 
   if (loading) {
@@ -142,6 +163,13 @@ export default function Profile() {
         profile={profile}
         isOwnProfile={isOwnProfile}
         onEditProfile={handleEditProfile}
+      />
+
+      <EditProfileModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        profile={profile}
+        onSave={handleSaveProfile}
       />
 
       <div className="mb-4">
