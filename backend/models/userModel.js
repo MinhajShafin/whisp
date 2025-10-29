@@ -6,11 +6,15 @@ const userSchema = mongoose.Schema(
     username: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    bio: { type: String, default: "" }, // New
-    avatar: { type: String, default: "" }, // New, optional profile image URL
+    bio: { type: String, default: "" },
+    avatar: { type: String, default: "" },
     friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     blocked: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    // Email verification fields
+    isEmailVerified: { type: Boolean, default: false },
+    emailVerificationToken: { type: String },
+    emailVerificationExpires: { type: Date },
   },
   { timestamps: true }
 );

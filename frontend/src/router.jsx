@@ -4,6 +4,7 @@ import MainLayout from "@/layouts/MainLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
+import VerifyEmail from "@/pages/auth/VerifyEmail";
 import Timeline from "@/pages/Timeline";
 import Profile from "@/pages/Profile";
 import Friends from "@/pages/Friends";
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
     children: [
       { path: "/login", element: <Login /> },
       { path: "/register", element: <Register /> },
+      { path: "/verify-email/:token", element: <VerifyEmail /> },
     ],
   },
 

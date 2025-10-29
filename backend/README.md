@@ -162,6 +162,55 @@ POST /api/auth/logout
 }
 ```
 
+### Verify Email
+
+```http
+GET /api/auth/verify-email/:token
+```
+
+**URL Parameters:**
+
+- `token` - Email verification token sent to user's email
+
+**Response (Success):**
+
+```json
+{
+  "message": "Email verified successfully! You can now log in.",
+  "verified": true
+}
+```
+
+**Response (Error):**
+
+```json
+{
+  "message": "Invalid or expired verification token. Please request a new verification email."
+}
+```
+
+### Resend Verification Email
+
+```http
+POST /api/auth/resend-verification
+```
+
+**Body:**
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Verification email resent successfully. Please check your inbox."
+}
+```
+
 ---
 
 ## 👤 User Routes
