@@ -14,6 +14,8 @@ A RESTful API backend for Whisp, a cozy microblogging platform built with Node.j
 ## 📋 Features
 
 - User authentication (register, login, logout with token blacklisting)
+- Email verification (verify link + resend)
+- Password change that forces re-login on all devices
 - Post whispers (short updates, max 280 characters)
 - Like/dislike system with Reddit-style scoring (points = likes - dislikes)
 - Comments and nested replies
@@ -116,6 +118,8 @@ POST /api/auth/register
   "_id": "user_id",
   "username": "john_doe",
   "email": "john@example.com",
+  "isEmailVerified": false,
+  "message": "Registration successful! Please check your email to verify your account.",
   "token": "jwt_token_here"
 }
 ```
@@ -142,7 +146,17 @@ POST /api/auth/login
   "_id": "user_id",
   "username": "john_doe",
   "email": "john@example.com",
+  "isEmailVerified": true,
   "token": "jwt_token_here"
+}
+```
+
+If the email is not verified:
+
+```json
+{
+  "message": "Please verify your email before logging in. Check your inbox for the verification link.",
+  "requiresVerification": true
 }
 ```
 
@@ -227,16 +241,26 @@ GET /api/users/:id
 {
   "_id": "user_id",
   "username": "john_doe",
-  "email": "john@example.com",
-  "friends": [],
-  "blocked": []
+  "bio": "",
+  "avatar": "",
+  "friendCount": 0,
+  "whisperCount": 0,
+  "mutualFriendsWithRequester": 0,
+  "createdAt": "2025-10-28T12:00:00.000Z",
+  "relationship": {
+    "isSelf": false,
+    "isFriend": false,
+    "hasSentRequest": false,
+    "hasIncomingRequest": false,
+    "isBlocked": false
+  }
 }
 ```
 
 ### Update User Profile
 
 ```http
-PUT /api/users/profile
+PUT /api/users/me
 ```
 
 **Headers:** `Authorization: Bearer <token>`
@@ -246,9 +270,62 @@ PUT /api/users/profile
 ```json
 {
   "username": "new_username",
-  "email": "newemail@example.com",
-  "avatar": "avatar_url"
+  "bio": "updated bio",
+  "avatar": "https://..."
 }
+```
+
+### Change Password
+
+```http
+PUT /api/users/me/password
+```
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Body:**
+
+```json
+{
+  "currentPassword": "oldPass123",
+  "newPassword": "newPass456"
+}
+```
+
+**Response:**
+
+```json
+{ "message": "Password changed successfully", "requireReauth": true }
+```
+
+After success, all existing tokens are invalidated and the client should log in again.
+
+### Delete Account
+
+```http
+DELETE /api/users/me
+```
+
+Deletes the user, removes friendships/requests/blocks referencing the user, and deletes the user's whispers and messages.
+
+### Search User by Username
+
+```http
+GET /api/users/search/:username
+```
+
+**Response:**
+
+```json
+{ "_id": "user_id", "username": "John_Doe" }
+```
+
+### Block / Unblock Users
+
+```http
+POST /api/users/block/:userId
+POST /api/users/unblock/:userId
+GET  /api/users/blocked
 ```
 
 ---
@@ -516,45 +593,19 @@ DELETE /api/whispers/:id/comment/:commentId/reply/:replyId
 
 ## 👥 Friend Routes
 
-### Send Friend Request
+### Endpoints
 
-```http
-POST /api/friends/request/:userId
-```
+All require `Authorization: Bearer <token>`.
 
-**Headers:** `Authorization: Bearer <token>`
-
-### Accept Friend Request
-
-```http
-POST /api/friends/accept/:userId
-```
-
-**Headers:** `Authorization: Bearer <token>`
-
-### Remove Friend
-
-```http
-DELETE /api/friends/remove/:userId
-```
-
-**Headers:** `Authorization: Bearer <token>`
-
-### Block User
-
-```http
-POST /api/friends/block/:userId
-```
-
-**Headers:** `Authorization: Bearer <token>`
-
-### Unblock User
-
-```http
-POST /api/friends/unblock/:userId
-```
-
-**Headers:** `Authorization: Bearer <token>`
+- Send request: `POST /api/friends/request` — Body `{ "receiverId": "<userId>" }`
+- Accept request: `POST /api/friends/accept` — Body `{ "senderId": "<userId>" }`
+- Reject request: `POST /api/friends/reject` — Body `{ "senderId": "<userId>" }`
+- Cancel sent request: `POST /api/friends/cancel` — Body `{ "receiverId": "<userId>" }`
+- List friends: `GET /api/friends/friends`
+- Incoming requests: `GET /api/friends/requests`
+- Outgoing (sent) requests: `GET /api/friends/outgoing`
+- Mutual friends with someone: `GET /api/friends/mutual/:friendId`
+- Remove friend: `DELETE /api/friends/:friendId`
 
 ---
 
@@ -572,7 +623,7 @@ POST /api/messages
 
 ```json
 {
-  "recipientId": "recipient_user_id",
+  "receiverId": "recipient_user_id",
   "content": "Hello!"
 }
 ```
@@ -614,6 +665,14 @@ All routes requiring authentication check:
 2. Token not blacklisted
 3. User exists in database
 
+### Password Change Forces Re-Authentication
+
+When a user changes their password:
+
+- `passwordChangedAt` is recorded on the user.
+- The auth middleware rejects any JWT where `iat < passwordChangedAt`.
+- The currently used token is added to a blacklist, invalidating it immediately.
+
 ---
 
 ## 📊 Data Models
@@ -626,6 +685,11 @@ All routes requiring authentication check:
 - `avatar` (optional)
 - `friends` (array of user IDs)
 - `blocked` (array of user IDs)
+- `bio` (optional)
+- `isEmailVerified` (boolean)
+- `emailVerificationToken` (string)
+- `emailVerificationExpires` (date)
+- `passwordChangedAt` (date)
 
 ### Whisper
 
@@ -679,6 +743,10 @@ lsof -ti:5000 | xargs kill -9
 - Check that the token hasn't expired (default: 30 days)
 - After logout, the token is blacklisted and cannot be reused
 
+### 401 After Changing Password
+
+Expected: password change invalidates existing tokens. Log in again to get a new token.
+
 ---
 
 ## 🧪 Testing with Postman
@@ -696,7 +764,8 @@ lsof -ti:5000 | xargs kill -9
 2. POST `/api/whispers` → Create a whisper
 3. POST `/api/whispers/:id/like` → Like your whisper
 4. GET `/api/whispers/timeline` → See your feed
-5. POST `/api/auth/logout` → Invalidate token
+5. PUT `/api/users/me/password` → Change password (observe 401 on old tokens)
+6. POST `/api/auth/logout` → Invalidate token
 
 ---
 
@@ -738,10 +807,9 @@ backend/
 - [ ] Real-time messaging with Socket.io
 - [ ] Image/media upload support
 - [ ] Hashtag and mention system
-- [ ] Search functionality
 - [ ] Trending whispers algorithm
-- [ ] Email verification
 - [ ] Password reset flow
+- [ ] Two-factor authentication (2FA)
 - [ ] User profile avatars with cloud storage
 - [ ] Separate Comment collection for better scalability
 

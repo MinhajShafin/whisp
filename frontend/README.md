@@ -1,29 +1,29 @@
 # Whisp Frontend
 
-A modern, cozy microblogging platform frontend built with React, Vite, and shadcn/ui.
+A modern, cozy microblogging platform frontend built with React, Vite, Tailwind CSS, and shadcn/ui.
 
 ## 🚀 Tech Stack
 
-- **Framework**: React 19
-- **Build Tool**: Vite 7
-- **Styling**: Tailwind CSS 4
-- **UI Components**: shadcn/ui
-- **Routing**: React Router v7
-- **HTTP Client**: Axios
-- **Linting**: ESLint 9
+- Framework: React 19
+- Build Tool: Vite 7
+- Styling: Tailwind CSS 4 (design tokens via CSS variables)
+- UI Components: shadcn/ui
+- Routing: React Router v7
+- HTTP Client: Axios
+- Linting: ESLint 9
 
 ## ✨ Features
 
-- 🎨 Beautiful UI with shadcn/ui components
-- 🌓 Dark/Light theme support
-- 🔐 JWT authentication with protected routes
-- 💬 Real-time-like whisper feed
-- ❤️ Reddit-style like/dislike system with points
-- 💭 Nested comments and replies
-- 👥 Friend system with blocking
-- 📱 Fully responsive design
-- ♿ Accessible components
-- 🎯 Path aliases (`@/`) for clean imports
+- Beautiful UI with shadcn/ui components
+- Dark/Light theme with no flicker (pre-hydration theme init)
+- JWT authentication with protected routes
+- Password change forces re-login on all devices (secure token invalidation)
+- Real-time-like whisper feed
+- Reddit-style like/dislike system with points
+- Nested comments and replies
+- Friend system with blocking
+- Fully responsive and accessible
+- Path aliases (`@/`) for clean imports
 
 ## 📋 Prerequisites
 
@@ -63,13 +63,20 @@ The app will run on **http://localhost:5173** (or the next available port).
 
 ### 5. Connect to backend
 
-Update the base URL in `src/api/axiosInstance.js` if your backend is not on `http://localhost:5000`:
+By default, the app talks to `http://localhost:5000/api`. To change it for different environments, set an env var and read it in `src/api/axiosInstance.js` (already supported by Vite):
 
-```javascript
+```js
+// src/api/axiosInstance.js
 const axiosInstance = axios.create({
-  baseURL: "http://localhost:5000/api",
-  // ...
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api",
+  withCredentials: true,
 });
+```
+
+Set the value in `.env`:
+
+```env
+VITE_API_BASE_URL=https://your-backend.example.com/api
 ```
 
 ## 📦 Available Scripts
@@ -171,26 +178,34 @@ import { formatDate } from "@/utils/formatDate";
 import { Button } from "@/components/ui/button";
 ```
 
-## 🔐 Authentication Flow
+## 🔐 Authentication & Session
 
 ### Login/Register
 
-1. User submits credentials via `Login.jsx` or `Register.jsx`
-2. API call to backend via `authAPI.js`
-3. JWT token received and stored in `AuthContext`
-4. Token added to axios instance default headers
-5. User redirected to timeline
+1. User submits credentials via `Login.jsx` or `Register.jsx`.
+2. API call to backend via `authAPI.js`.
+3. JWT returned and stored in `AuthContext` + `localStorage`.
+4. Axios interceptor adds `Authorization: Bearer <token>` to all requests.
+5. User is redirected to the timeline.
 
 ### Protected Routes
 
-Routes like `/timeline`, `/profile`, `/friends` are protected. Unauthenticated users are redirected to `/login`.
+Routes like `/timeline`, `/profile`, `/friends` require auth. Unauthenticated users are redirected to `/login`.
 
 ### Logout
 
-1. User clicks logout in `Navbar`
-2. Token sent to backend `/api/auth/logout` (blacklisted)
-3. Token cleared from context and axios headers
-4. User redirected to home/login
+1. User clicks logout in the Navbar.
+2. Request sent to `/api/auth/logout` to blacklist the token.
+3. Local auth state and token are cleared.
+4. User is redirected to login.
+
+### Password Change and Token Invalidation
+
+For security, changing your password logs you out everywhere:
+
+- Server sets `passwordChangedAt` and rejects any JWT issued before that time.
+- The current token is added to a blacklist immediately after password change.
+- The frontend logs out the user upon success and prompts to log in again.
 
 ## 🎨 Styling Guide
 
@@ -204,36 +219,20 @@ Use Tailwind utility classes for styling:
 </div>
 ```
 
-### Theme Support
+### Theme Support (Light/Dark)
 
-The app supports light/dark themes via `ThemeContext`:
-
-```jsx
-import { useTheme } from "@/context/ThemeContext";
-
-function MyComponent() {
-  const { theme, toggleTheme } = useTheme();
-
-  return <button onClick={toggleTheme}>Current theme: {theme}</button>;
-}
-```
+- Design tokens via Tailwind CSS variables: `bg-background`, `text-foreground`, `bg-card`, `border-border`, etc.
+- Initial theme is applied before React hydration using a small inline script to avoid flash of incorrect theme.
+- Users can choose Light/Dark/System in `Settings`. Preference is saved to `localStorage` and the `html.dark` class is toggled at runtime.
 
 ### Custom Styles
 
-Add global styles or CSS variables to `src/global.css`:
+Global styles and tokens live in `src/global.css` (Tailwind v4):
 
 ```css
 @import "tailwindcss";
 
-:root {
-  --primary: 220 50% 50%;
-  --background: 0 0% 100%;
-}
-
-.dark {
-  --primary: 220 50% 60%;
-  --background: 0 0% 10%;
-}
+/* Token variables are provided by Tailwind + your theme config */
 ```
 
 ## 🧩 Component Guidelines
@@ -373,9 +372,13 @@ If imports fail:
 
 ### Backend Connection Error
 
-- Verify backend is running on `http://localhost:5000`
-- Check `axiosInstance.js` has correct `baseURL`
-- Check CORS is enabled in backend
+- Verify backend is running on `http://localhost:5000` (or set `VITE_API_BASE_URL`).
+- Check `axiosInstance.js` has correct `baseURL`.
+- Ensure CORS allows your frontend origin in the backend.
+
+### After Password Change I Get 401s
+
+This is expected: password changes force re-login. Simply log in again.
 
 ### Tailwind Styles Not Working
 
@@ -460,10 +463,9 @@ netlify deploy --prod --dir=dist
 
 ### Environment Variables
 
-For production, set:
+Frontend:
 
-- `VITE_API_BASE_URL`: Backend API URL
-- Use in `axiosInstance.js`: `baseURL: import.meta.env.VITE_API_BASE_URL`
+- `VITE_API_BASE_URL`: Backend API URL (e.g., `https://api.example.com/api`)
 
 ## 🧪 Testing (Future)
 
