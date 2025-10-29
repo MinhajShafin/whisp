@@ -46,9 +46,9 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+    <nav className="bg-card text-foreground shadow-sm border-b border-border sticky top-0 z-50 transition-colors">
       <div className="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
-        <Link to="/" className="text-2xl font-bold text-gray-900">
+        <Link to="/" className="text-2xl font-bold">
           Whisp 🕊️
         </Link>
 
@@ -61,19 +61,19 @@ const Navbar = () => {
                   value={searchId}
                   onChange={(e) => setSearchId(e.target.value)}
                   placeholder="Search by username"
-                  className="px-3 py-1.5 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  className="px-3 py-1.5 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
                   disabled={isSearching}
                 />
                 <button
                   type="submit"
-                  className="px-3 py-1.5 text-sm rounded-md bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50"
+                  className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
                   disabled={isSearching}
                 >
                   {isSearching ? "..." : "Search"}
                 </button>
               </form>
               {searchError && (
-                <div className="absolute top-full left-0 mt-1 px-3 py-1.5 bg-red-50 text-red-600 text-sm rounded-md border border-red-200 whitespace-nowrap">
+                <div className="absolute top-full left-0 mt-1 px-3 py-1.5 bg-destructive/10 text-destructive text-sm rounded-md border border-destructive/20 whitespace-nowrap">
                   {searchError}
                 </div>
               )}
@@ -83,34 +83,46 @@ const Navbar = () => {
             <>
               <Link
                 to="/timeline"
-                className="text-gray-700 hover:text-gray-900"
+                className="text-foreground/80 hover:text-foreground"
               >
                 Timeline
               </Link>
-              <Link to="/friends" className="text-gray-700 hover:text-gray-900">
+              <Link
+                to="/friends"
+                className="text-foreground/80 hover:text-foreground"
+              >
                 Friends
               </Link>
               <Link
                 to={`/profile/${user._id}`}
-                className="text-gray-700 hover:text-gray-900"
+                className="text-foreground/80 hover:text-foreground"
               >
                 {user.username}
               </Link>
+              <Link
+                to="/settings"
+                className="text-foreground/80 hover:text-foreground"
+              >
+                Settings
+              </Link>
               <button
                 onClick={handleLogout}
-                className="text-gray-700 hover:text-red-600"
+                className="text-foreground/80 hover:text-destructive"
               >
                 Logout
               </button>
             </>
           ) : (
             <>
-              <Link to="/login" className="text-gray-700 hover:text-gray-900">
+              <Link
+                to="/login"
+                className="text-foreground/80 hover:text-foreground"
+              >
                 Login
               </Link>
               <Link
                 to="/register"
-                className="text-gray-700 hover:text-gray-900"
+                className="text-foreground/80 hover:text-foreground"
               >
                 Register
               </Link>
