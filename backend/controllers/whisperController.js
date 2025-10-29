@@ -23,7 +23,24 @@ export const createWhisper = async (req, res) => {
       content: content.trim(),
     });
 
-    res.status(201).json(whisper);
+    // Populate user field before sending response
+    await whisper.populate("user", "username");
+
+    // Return enriched format matching timeline
+    const enrichedWhisper = {
+      _id: whisper._id,
+      content: whisper.content,
+      user: whisper.user,
+      likes: whisper.likes || [],
+      dislikes: whisper.dislikes || [],
+      likeCount: 0,
+      dislikeCount: 0,
+      points: 0,
+      createdAt: whisper.createdAt,
+      comments: [],
+    };
+
+    res.status(201).json(enrichedWhisper);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to create whisper" });
