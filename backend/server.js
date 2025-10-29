@@ -18,7 +18,16 @@ const app = express();
 // Middleware
 app.set("trust proxy", 1); // if behind a proxy (e.g., Render/Heroku/Nginx)
 app.use(helmet());
-app.use(cors());
+// CORS: allow frontend origin and credentials
+const allowedOrigin = process.env.CLIENT_URL || "http://localhost:5173";
+app.use(
+  cors({
+    origin: allowedOrigin,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 app.use(express.json()); // Parse JSON bodies BEFORE rate limiters
 
 // Global rate limiter for all API routes
