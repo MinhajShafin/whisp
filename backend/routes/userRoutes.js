@@ -8,6 +8,8 @@ import {
   getUserProfile,
   updateUserProfile,
   searchUserByUsername,
+  changePassword,
+  deleteMe,
 } from "../controllers/userController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -25,4 +27,6 @@ router.post("/unblock/:userId", unblockUser);
 router.get("/blocked", getBlockedUsers);
 router.get("/:id", getUserProfile);
 router.put("/me", updateUserProfile);
+router.put("/me/password", changePassword);
+router.delete("/me", deleteMe);
 export default router;

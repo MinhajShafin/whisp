@@ -1,6 +1,7 @@
 import User from "../models/userModel.js";
 import jwt from "jsonwebtoken";
 import Whisper from "../models/whisperModel.js";
+import Message from "../models/messageModel.js";
 
 // helper function to create token
 const generateToken = (id) => {
@@ -325,5 +326,87 @@ export const searchUserByUsername = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to search user" });
+  }
+};
+
+// Change password for the authenticated user
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+
+    if (
+      !currentPassword ||
+      typeof currentPassword !== "string" ||
+      currentPassword.length < 6 ||
+      currentPassword.length > 64
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Current password must be 6-64 characters." });
+    }
+
+    if (
+      !newPassword ||
+      typeof newPassword !== "string" ||
+      newPassword.length < 6 ||
+      newPassword.length > 64
+    ) {
+      return res
+        .status(400)
+        .json({ message: "New password must be 6-64 characters." });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const isMatch = await user.matchPassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+
+    if (currentPassword === newPassword) {
+      return res
+        .status(400)
+        .json({ message: "New password must be different from current" });
+    }
+
+    user.password = newPassword; // will be hashed by pre-save hook
+    await user.save();
+
+    return res.status(200).json({ message: "Password changed successfully" });
+  } catch (error) {
+    console.error("Change password error:", error);
+    return res.status(500).json({ message: "Failed to change password" });
+  }
+};
+
+// Delete the authenticated user's account and clean up references
+export const deleteMe = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Pull userId from other users' arrays to avoid dangling refs
+    await Promise.all([
+      User.updateMany({ friends: userId }, { $pull: { friends: userId } }),
+      User.updateMany(
+        { friendRequests: userId },
+        { $pull: { friendRequests: userId } }
+      ),
+      User.updateMany({ blocked: userId }, { $pull: { blocked: userId } }),
+    ]);
+
+    // Delete user's content
+    await Promise.all([
+      Whisper.deleteMany({ user: userId }),
+      Message.deleteMany({ $or: [{ sender: userId }, { receiver: userId }] }),
+    ]);
+
+    // Finally delete the user
+    await User.findByIdAndDelete(userId);
+
+    return res.status(200).json({ message: "Account deleted successfully" });
+  } catch (error) {
+    console.error("Delete account error:", error);
+    return res.status(500).json({ message: "Failed to delete account" });
   }
 };

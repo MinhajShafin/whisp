@@ -101,11 +101,14 @@ export default function Settings() {
       return;
     }
     try {
-      // TODO: implement /users/me/password in backend
-      await new Promise((r) => setTimeout(r, 800));
-      setPwMsg("Password changed (stub)");
+      await axiosInstance.put("/users/me/password", {
+        currentPassword: passwords.current,
+        newPassword: passwords.new,
+      });
+      setPwMsg("Password changed successfully");
+      setPasswords({ current: "", new: "", confirm: "" });
     } catch (err) {
-      setPwErr("Failed to change password");
+      setPwErr(err.response?.data?.message || "Failed to change password");
     } finally {
       setPwLoading(false);
       setTimeout(() => setPwMsg(""), 2000);
@@ -122,12 +125,11 @@ export default function Settings() {
     setDeleteErr("");
     setDeleteMsg("");
     try {
-      // TODO: implement DELETE /users/me in backend
-      await new Promise((r) => setTimeout(r, 1000));
-      setDeleteMsg("Account deleted (stub)");
+      await axiosInstance.delete("/users/me");
+      setDeleteMsg("Account deleted successfully");
       if (typeof logout === "function") logout();
     } catch (err) {
-      setDeleteErr("Failed to delete account");
+      setDeleteErr(err.response?.data?.message || "Failed to delete account");
     } finally {
       setDeleteLoading(false);
     }
