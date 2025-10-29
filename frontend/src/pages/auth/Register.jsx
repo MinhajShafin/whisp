@@ -25,8 +25,11 @@ const Register = () => {
     e.preventDefault();
     setError("");
     try {
-      const res = await axiosInstance.post("/auth/register", formData);
-      login(res.data.user, res.data.token);
+  const res = await axiosInstance.post("/auth/register", formData);
+  // Backend returns {_id, username, email, token}
+  const { _id, username, email, token } = res.data || {};
+  const userPayload = _id && username ? { _id, username, email } : null;
+  login(userPayload, token);
       navigate("/timeline");
     } catch (err) {
       setError(err.response?.data?.message || "Registration failed");

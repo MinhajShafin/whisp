@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import PublicLayout from "@/layouts/PublicLayout";
 import MainLayout from "@/layouts/MainLayout";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
 import Timeline from "@/pages/Timeline";
@@ -23,13 +24,62 @@ const router = createBrowserRouter([
   {
     element: <MainLayout />,
     children: [
-      { path: "/", element: <Timeline /> },
-      { path: "/timeline", element: <Timeline /> },
-      { path: "/profile/:id", element: <Profile /> },
-      { path: "/friends", element: <Friends /> },
-      { path: "/messages/:friendId?", element: <Messages /> },
-      { path: "/settings", element: <Settings /> },
-      { path: "/friends/:friendId?", element: <Friends /> },
+      {
+        path: "/",
+        element: (
+          <ProtectedRoute>
+            <Timeline />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/timeline",
+        element: (
+          <ProtectedRoute>
+            <Timeline />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/profile/:id",
+        element: (
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/friends",
+        element: (
+          <ProtectedRoute>
+            <Friends />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/messages/:friendId?",
+        element: (
+          <ProtectedRoute>
+            <Messages />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/settings",
+        element: (
+          <ProtectedRoute>
+            <Settings />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/friends/:friendId?",
+        element: (
+          <ProtectedRoute>
+            <Friends />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 ]);

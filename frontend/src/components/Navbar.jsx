@@ -27,7 +27,7 @@ const Navbar = () => {
               <Link to="/friends" className="text-gray-700 hover:text-gray-900">
                 Friends
               </Link>
-              <Link to="/profile" className="text-gray-700 hover:text-gray-900">
+              <Link to={`/profile/${user._id}`} className="text-gray-700 hover:text-gray-900">
                 {user.username}
               </Link>
               <button
